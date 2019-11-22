@@ -1,7 +1,6 @@
 import argparse
 import os
 import sys
-import tensorflow as tf
 import yaml
 from model.att_res_seq2seq_supervisor import AttentionResidualSeq2SeqSupervisor
 from lib import utils

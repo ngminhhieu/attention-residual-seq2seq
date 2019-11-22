@@ -22,7 +22,6 @@ class StandardScaler:
     def __init__(self, data):
         self.mean = np.mean(data, axis=0)
         self.std = np.std(data, axis=0)
-        
 
     def transform(self, data):
         return (data - self.mean) / self.std
@@ -53,7 +52,7 @@ def get_logger(log_dir, name, log_filename='info.log', level=logging.INFO):
 
 def prepare_train_valid_test_2d(data, p):
     p_valid_size = 0.2
-    train_size = int(data.shape[0] * (1-p-p_valid_size))
+    train_size = int(data.shape[0] * (1 - p - p_valid_size))
     valid_size = int(data.shape[0] * p_valid_size)
 
     train_set = data[0:train_size]
@@ -61,6 +60,7 @@ def prepare_train_valid_test_2d(data, p):
     test_set = data[train_size + valid_size:]
 
     return train_set, valid_set, test_set
+
 
 def create_data_lstm_ed(data, seq_len, r, input_dim, output_dim, horizon):
     K = data.shape[1]
@@ -82,10 +82,11 @@ def create_data_lstm_ed(data, seq_len, r, input_dim, output_dim, horizon):
 
             de_x[_idx, 0, 0] = 0
             de_x[_idx, 1:, 0] = data[i + seq_len - 1:i + seq_len + horizon - 1, k]
-            de_y[_idx, :, 0] = data[i + seq_len-1:i + seq_len + horizon, k]
+            de_y[_idx, :, 0] = data[i + seq_len - 1:i + seq_len + horizon, k]
 
             _idx += 1
     return en_x, de_x, de_y
+
 
 def load_dataset_lstm_ed(seq_len, horizon, input_dim, output_dim, dataset, r, p, **kwargs):
     raw_data = np.load(dataset)['data']
@@ -105,21 +106,21 @@ def load_dataset_lstm_ed(seq_len, horizon, input_dim, output_dim, dataset, r, p,
     data['test_data_norm'] = test_data2d_norm.copy()
 
     encoder_input_train, decoder_input_train, decoder_target_train = create_data_lstm_ed(train_data2d_norm,
-                                                                                                     seq_len=seq_len,
-                                                                                                     r=r,
-                                                                                                     input_dim=input_dim,
-                                                                                                     output_dim=output_dim,
-                                                                                                     horizon=horizon)
+                                                                                         seq_len=seq_len,
+                                                                                         r=r,
+                                                                                         input_dim=input_dim,
+                                                                                         output_dim=output_dim,
+                                                                                         horizon=horizon)
     encoder_input_val, decoder_input_val, decoder_target_val = create_data_lstm_ed(valid_data2d_norm,
-                                                                                               seq_len=seq_len, r=r,
-                                                                                               input_dim=input_dim,
-                                                                                               output_dim=output_dim,
-                                                                                               horizon=horizon)
+                                                                                   seq_len=seq_len, r=r,
+                                                                                   input_dim=input_dim,
+                                                                                   output_dim=output_dim,
+                                                                                   horizon=horizon)
     encoder_input_eval, decoder_input_eval, decoder_target_eval = create_data_lstm_ed(test_data2d_norm,
-                                                                                                  seq_len=seq_len, r=r,
-                                                                                                  input_dim=input_dim,
-                                                                                                  output_dim=output_dim,
-                                                                                                  horizon=horizon)
+                                                                                      seq_len=seq_len, r=r,
+                                                                                      input_dim=input_dim,
+                                                                                      output_dim=output_dim,
+                                                                                      horizon=horizon)
 
     for cat in ["train", "val", "eval"]:
         e_x, d_x, d_y = locals()["encoder_input_" + cat], locals()[

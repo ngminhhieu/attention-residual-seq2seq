@@ -1,7 +1,7 @@
 import tensorflow as tf
 import os
-from keras.layers import Layer
-from keras import backend as K
+from tensorflow.python.keras.layers import Layer
+from tensorflow.python.keras import backend as K
 
 
 class AttentionLayer(Layer):
@@ -10,7 +10,8 @@ class AttentionLayer(Layer):
     There are three sets of weights introduced W_a, U_a, and V_a
      """
 
-    def __init__(self, **kwargs):
+    def __init__(self, input_shape, **kwargs):
+        self._input_shape = input_shape
         super(AttentionLayer, self).__init__(**kwargs)
 
     def build(self, input_shape):
@@ -18,19 +19,19 @@ class AttentionLayer(Layer):
         # Create a trainable weight variable for this layer.
 
         self.W_a = self.add_weight(name='W_a',
-                                   shape=tf.TensorShape((input_shape[0][2], input_shape[0][2])),
+                                   shape=tf.TensorShape((self._input_shape[0][2], self._input_shape[0][2])),
                                    initializer='uniform',
                                    trainable=True)
         self.U_a = self.add_weight(name='U_a',
-                                   shape=tf.TensorShape((input_shape[1][2], input_shape[0][2])),
+                                   shape=tf.TensorShape((self._input_shape[1][2], self._input_shape[0][2])),
                                    initializer='uniform',
                                    trainable=True)
         self.V_a = self.add_weight(name='V_a',
-                                   shape=tf.TensorShape((input_shape[0][2], 1)),
+                                   shape=tf.TensorShape((self._input_shape[0][2], 1)),
                                    initializer='uniform',
                                    trainable=True)
 
-        super(AttentionLayer, self).build(input_shape)  # Be sure to call this at the end
+        super(AttentionLayer, self).build(self._input_shape)  # Be sure to call this at the end
 
     def call(self, inputs, verbose=False):
         """
@@ -49,8 +50,8 @@ class AttentionLayer(Layer):
             assert isinstance(states, list) or isinstance(states, tuple), assert_msg
 
             """ Some parameters required for shaping tensors"""
-            en_seq_len, en_hidden = encoder_out_seq.shape[1], encoder_out_seq.shape[2]
-            de_hidden = inputs.shape[-1]
+            en_seq_len, en_hidden = self._input_shape[0][1], self._input_shape[0][2]
+            de_hidden = self._input_shape[1][-1]
 
             """ Computing S.Wa where S=[s0, s1, ..., si]"""
             # <= batch_size*en_seq_len, latent_dim
@@ -98,8 +99,8 @@ class AttentionLayer(Layer):
             fake_state = K.tile(fake_state, [1, hidden_size])  # <= (batch_size, latent_dim
             return fake_state
 
-        fake_state_c = create_inital_state(encoder_out_seq, encoder_out_seq.shape[-1])
-        fake_state_e = create_inital_state(encoder_out_seq, encoder_out_seq.shape[1])  # <= (batch_size, enc_seq_len, latent_dim
+        fake_state_c = create_inital_state(encoder_out_seq, self._input_shape[0][-1])
+        fake_state_e = create_inital_state(encoder_out_seq, self._input_shape[0][1])  # <= (batch_size, enc_seq_len, latent_dim
 
         """ Computing energy outputs """
         # e_outputs => (batch_size, de_seq_len, en_seq_len)

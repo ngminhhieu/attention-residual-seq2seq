@@ -1,18 +1,17 @@
-import tensorflow as tf
 import os
 import time
-import keras.callbacks as keras_callbacks
 import numpy as np
 import pandas as pd
 import yaml
-from keras.callbacks import ModelCheckpoint, EarlyStopping
-from keras.layers import LSTM, Dense, Input
-from keras.models import Model
-from keras.utils import plot_model
+from tensorflow.python.keras.callbacks import ModelCheckpoint, EarlyStopping
+from tensorflow.python.keras.layers import Dense, Input, Concatenate
+from tensorflow.python.keras.models import Model
+from tensorflow.python.keras.utils import plot_model
+from tensorflow.python.keras import callbacks as keras_callbacks
 from tqdm import tqdm
 from lib import utils
-from model.residual_lstm import ResidualLSTM
-from model.attention import BahdanauAttention, Attention_decoder
+from model.residual_lstm import Residual_enc, Residual_dec
+from model.attention import AttentionLayer
 
 
 class TimeHistory(keras_callbacks.Callback):
@@ -69,22 +68,22 @@ class AttentionResidualSeq2SeqSupervisor():
 
         # Load data
         self._data = utils.load_dataset_lstm_ed(seq_len=self._seq_len, horizon=self._horizon,
-                                                    input_dim=self._input_dim, output_dim=self._output_dim,
-                                                    dataset=self._dataset,
-                                                    r=self._verified_percentage, p=self._test_size, **kwargs)
+                                                input_dim=self._input_dim, output_dim=self._output_dim,
+                                                dataset=self._dataset,
+                                                r=self._verified_percentage, p=self._test_size, **kwargs)
         self.callbacks_list = []
 
-        self._checkpoints = ModelCheckpoint( self._log_dir + "best_model.hdf5",
-                                            monitor='val_loss', verbose=1, save_best_only=True,mode='auto', period=1)
+        self._checkpoints = ModelCheckpoint(self._log_dir + "best_model.hdf5",
+                                            monitor='val_loss', verbose=1, save_best_only=True, mode='auto', period=1)
         self._earlystop = EarlyStopping(monitor='val_loss', patience=self._train_kwargs.get('patience'),
                                         verbose=1, mode='auto')
         self._time_callback = TimeHistory()
-        
+
         self.callbacks_list.append(self._checkpoints)
         self.callbacks_list.append(self._earlystop)
         self.callbacks_list.append(self._time_callback)
 
-        self.model = self._model_construction(is_training=is_training)
+        self._model_construction(is_training=is_training)
 
     @staticmethod
     def _get_log_dir(kwargs):
@@ -102,7 +101,7 @@ class AttentionResidualSeq2SeqSupervisor():
             verified_percentage = kwargs['model'].get('verified_percentage')
 
             run_id = '%s_%d_%d_%s_%d_%g/' % (
-                model_type,seq_len, horizon,
+                model_type, seq_len, horizon,
                 structure, batch_size, verified_percentage)
             base_dir = kwargs.get('base_dir')
             log_dir = os.path.join(base_dir, run_id)
@@ -112,61 +111,86 @@ class AttentionResidualSeq2SeqSupervisor():
 
     def _model_construction(self, is_training=True):
         # Model
-        encoder_inputs = Input(shape=(None, self._input_dim))
-        encoder_outputs, state_h, state_c = ResidualLSTM(encoder_inputs, rnn_unit=self._rnn_units,
-                                                         rnn_depth=self._rnn_layers, rnn_dropout=self._drop_out)
-
-        encoder_states = [state_h, state_c]
-
-        attention_layer = BahdanauAttention(self._rnn_units)
-
-
-        decoder_inputs = Input(shape=(None, self._output_dim))
-
-        decoder_outputs, _, _ = Attention_decoder(decoder_inputs,state_h,state_c, self._rnn_units,self._rnn_layers,
-                                                  self._drop_out)
-        
-        # dense decoder_outputs
-        decoder_dense = Dense(self._output_dim, activation='relu')
-        decoder_outputs = decoder_dense(decoder_outputs)
-
-        # Define the model that will turn
-        # `encoder_input_data` & `decoder_input_data` into `decoder_target_data`
-        model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
-
         if is_training:
-            return model
+
+            encoder_inputs = Input(shape=(self._seq_len, self._input_dim), name='encoder_input')
+            encoder_outputs, enc_state_h, enc_state_c = Residual_enc(encoder_inputs, rnn_unit=self._rnn_units,
+                                                                     rnn_depth=self._rnn_layers,
+                                                                     rnn_dropout=self._drop_out)
+
+            encoder_states = [enc_state_h, enc_state_c]
+
+            decoder_inputs = Input(shape=(self._horizon + 1, self._output_dim),
+                                   name='decoder_input')
+
+            decoder_outputs, dec_state_h, dec_state_c = Residual_dec(decoder_inputs, rnn_unit=self._rnn_units,
+                                                                     rnn_depth=self._rnn_layers,
+                                                                     rnn_dropout=self._drop_out,
+                                                                     init_states=encoder_states)
+
+            attn_layer = AttentionLayer(input_shape=([None, self._seq_len, self._rnn_units],
+                                                     [None, self._horizon + 1, self._rnn_units]),
+                                        name='attention_layer')
+            attn_out, attn_states = attn_layer([encoder_outputs, decoder_outputs])
+            decoder_outputs = Concatenate(axis=-1, name='concat_layer')([decoder_outputs, attn_out])
+
+            # dense decoder_outputs
+            decoder_dense = Dense(self._output_dim, activation='relu')
+            decoder_outputs = decoder_dense(decoder_outputs)
+
+            # Define the model that will turn
+            # `encoder_input_data` & `decoder_input_data` into `decoder_target_data`
+            self.model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
+            plot_model(model=self.model, to_file=self._log_dir + '/model.png', show_shapes=True, show_layer_names=True)
         else:
             self._logger.info("Load model from: {}".format(self._log_dir))
-            model.load_weights(self._log_dir + 'best_model.hdf5')
-            model.compile(optimizer=self._optimizer, loss='mse', metrics=['mse', 'mae'])
+            # --------------------------------------- ENcoder model ----------------------------------------------------
 
-            # Construct E_D model for predicting
-            encoder_states = encoder_outputs[1:]
+            encoder_inputs = Input(shape=(self._seq_len, self._input_dim), name='encoder_input')
+            encoder_outputs, enc_state_h, enc_state_c = Residual_enc(encoder_inputs, rnn_unit=self._rnn_units,
+                                                                     rnn_depth=self._rnn_layers,
+                                                                     rnn_dropout=self._drop_out)
+            encoder_states = [enc_state_h, enc_state_c]
             self.encoder_model = Model(encoder_inputs, encoder_states)
+            plot_model(model=self.encoder_model, to_file=self._log_dir + '/encoder.png', show_shapes=True)
 
-            decoder_state_input_h = Input(shape=(self._rnn_units,))
-            decoder_state_input_c = Input(shape=(self._rnn_units,))
+            # --------------------------------------- Decoder model ----------------------------------------------------
+            decoder_state_input_h = Input(shape=(self._rnn_units), name='decoder_state_input_h')
+            decoder_state_input_c = Input(shape=(self._rnn_units), name='decoder_state_input_c')
+            encoder_inf_states = Input(shape=(self._seq_len, self._rnn_units),
+                                       name='encoder_inf_states_input')
+            decoder_inputs = Input(shape=(self._horizon + 1, self._output_dim),
+                                   name='decoder_input')
+
             decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
 
-            decoder_outputs = Attention_decoder(decoder_inputs,state_h,state_c, self._rnn_units,self._rnn_layers,
-                                                  self._drop_out)
-            decoder_states = decoder_outputs[1]
+            decoder_outputs, dec_state_h, dec_state_c = Residual_dec(decoder_inputs, rnn_unit=self._rnn_units,
+                                                                     rnn_depth=self._rnn_layers,
+                                                                     rnn_dropout=self._drop_out,
+                                                                     init_states=decoder_states_inputs)
+            decoder_states = [dec_state_h, dec_state_c]
+
+            attn_layer_infer = AttentionLayer(input_shape=([self._batch_size, self._seq_len, self._rnn_units],
+                                                           [self._batch_size, self._horizon, self._rnn_units]),
+                                              name='attention_layer')
+
+            attn_out, attn_states = attn_layer_infer([encoder_inf_states, decoder_outputs])
+
+            decoder_outputs = Concatenate(axis=-1, name='concat')([decoder_outputs, attn_out])
+            decoder_dense = Dense(self._output_dim, activation='relu')
             decoder_outputs = decoder_dense(decoder_outputs)
+
             self.decoder_model = Model(
-                [decoder_inputs] + decoder_states_inputs,
+                [decoder_inputs, encoder_inf_states] + decoder_states_inputs,
                 [decoder_outputs] + decoder_states)
 
-            plot_model(model=self.encoder_model, to_file=self._log_dir + '/encoder.png', show_shapes=True)
             plot_model(model=self.decoder_model, to_file=self._log_dir + '/decoder.png', show_shapes=True)
 
-            return model
-
     def train(self):
-        self.model.compile(optimizer=self._optimizer, loss='mse', metrics=['mse', 'mae'])
+        self.model.compile(optimizer=self._optimizer, loss='mse')
 
-        training_history = self.model.fit([self._data['encoder_input_train'], self._data['decoder_input_train']],
-                                          self._data['decoder_target_train'],
+        training_history = self.model.fit(x=[self._data['encoder_input_train'], self._data['decoder_input_train']],
+                                          y =self._data['decoder_target_train'],
                                           batch_size=self._batch_size,
                                           epochs=self._epochs,
                                           callbacks=self.callbacks_list,
@@ -190,7 +214,7 @@ class AttentionResidualSeq2SeqSupervisor():
 
     def test(self):
         for time in range(self._run_times):
-            print('TIME: ', time+1)
+            print('TIME: ', time + 1)
             self._test()
 
     def _test(self):
@@ -207,10 +231,10 @@ class AttentionResidualSeq2SeqSupervisor():
         _pd[:l] = data_test[:l]
         iterator = tqdm(range(0, T - l - h, h))
         for i in iterator:
-            if i+l+h > T-h:
+            if i + l + h > T - h:
                 # trimm all zero lines
-                pd = pd[~np.all(pd==0, axis=1)]
-                _pd = _pd[~np.all(_pd==0, axis=1)]
+                pd = pd[~np.all(pd == 0, axis=1)]
+                _pd = _pd[~np.all(_pd == 0, axis=1)]
                 iterator.close()
                 break
             for k in range(K):
@@ -229,8 +253,8 @@ class AttentionResidualSeq2SeqSupervisor():
         np.savez(self._log_dir + "binary_matrix_and_pd", bm=bm, pd=pd)
         predicted_data = scaler.inverse_transform(_pd)
         ground_truth = scaler.inverse_transform(data_test[:_pd.shape[0]])
-        np.save(self._log_dir+'pd', predicted_data)
-        np.save(self._log_dir+'gt', ground_truth)
+        np.save(self._log_dir + 'pd', predicted_data)
+        np.save(self._log_dir + 'gt', ground_truth)
         # save metrics to log dir
         error_list = utils.cal_error(ground_truth.flatten(), predicted_data.flatten())
         utils.save_metrics(error_list, self._log_dir, self._alg_name)
@@ -242,7 +266,7 @@ class AttentionResidualSeq2SeqSupervisor():
 
         # target_seq[0, 0, 0] = source[0, -1, 0]
 
-        yhat = np.zeros(shape=(self._horizon+1, 1),
+        yhat = np.zeros(shape=(self._horizon + 1, 1),
                         dtype='float32')
         for i in range(self._horizon + 1):
             output_tokens, h, c = self.decoder_model.predict(
@@ -292,15 +316,14 @@ class AttentionResidualSeq2SeqSupervisor():
     def plot_models(self):
         plot_model(model=self.model, to_file=self._log_dir + '/model.png', show_shapes=True)
 
-
     def plot_series(self):
         from matplotlib import pyplot as plt
-        preds = np.load(self._log_dir+'pd.npy')
-        gt = np.load(self._log_dir+'gt.npy')
+        preds = np.load(self._log_dir + 'pd.npy')
+        gt = np.load(self._log_dir + 'gt.npy')
 
         for i in range(preds.shape[1]):
             plt.plot(preds[:, i], label='preds')
             plt.plot(gt[:, i], label='gt')
             plt.legend()
-            plt.savefig(self._log_dir + '[result_predict]series_{}.png'.format(str(i+1)))
+            plt.savefig(self._log_dir + '[result_predict]series_{}.png'.format(str(i + 1)))
             plt.close()
