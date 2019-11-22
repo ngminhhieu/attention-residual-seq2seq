@@ -1,3 +1,4 @@
+import tensorflow as tf
 import os
 import time
 import keras.callbacks as keras_callbacks
@@ -10,8 +11,8 @@ from keras.models import Model
 from keras.utils import plot_model
 from tqdm import tqdm
 from lib import utils
-from model.attention_mechanism import AttentionDecoder
 from model.residual_lstm import ResidualLSTM
+from model.attention import BahdanauAttention, Attention_decoder
 
 
 class TimeHistory(keras_callbacks.Callback):
@@ -112,14 +113,18 @@ class AttentionResidualSeq2SeqSupervisor():
     def _model_construction(self, is_training=True):
         # Model
         encoder_inputs = Input(shape=(None, self._input_dim))
-        encoder_outputs = ResidualLSTM(encoder_inputs, rnn_width=self._rnn_units, rnn_depth=self._rnn_layers, rnn_dropout=self._drop_out)
+        encoder_outputs, state_h, state_c = ResidualLSTM(encoder_inputs, rnn_unit=self._rnn_units,
+                                                         rnn_depth=self._rnn_layers, rnn_dropout=self._drop_out)
 
-        attention_decoder = AttentionDecoder(self._rnn_units, self._output_dim, is_monotonic=False, normalize_energy=False)
+        encoder_states = [state_h, state_c]
+
+        attention_layer = BahdanauAttention(self._rnn_units)
+
 
         decoder_inputs = Input(shape=(None, self._output_dim))
-        attention_outputs = attention_decoder([encoder_outputs, decoder_inputs], use_teacher_forcing=False)
 
-        decoder_outputs = ResidualLSTM(attention_outputs, rnn_width=self._rnn_units, rnn_depth=self._rnn_layers, rnn_dropout=self._drop_out)
+        decoder_outputs, _, _ = Attention_decoder(decoder_inputs,state_h,state_c, self._rnn_units,self._rnn_layers,
+                                                  self._drop_out)
         
         # dense decoder_outputs
         decoder_dense = Dense(self._output_dim, activation='relu')
@@ -144,7 +149,8 @@ class AttentionResidualSeq2SeqSupervisor():
             decoder_state_input_c = Input(shape=(self._rnn_units,))
             decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
 
-            decoder_outputs = ResidualLSTM(attention_outputs, rnn_width=self._rnn_units, rnn_depth=self._rnn_layers, rnn_dropout=self._drop_out)
+            decoder_outputs = Attention_decoder(decoder_inputs,state_h,state_c, self._rnn_units,self._rnn_layers,
+                                                  self._drop_out)
             decoder_states = decoder_outputs[1]
             decoder_outputs = decoder_dense(decoder_outputs)
             self.decoder_model = Model(

@@ -6,8 +6,6 @@ import yaml
 from model.att_res_seq2seq_supervisor import AttentionResidualSeq2SeqSupervisor
 from lib import utils
 
-config = tf.ConfigProto()
-session = tf.Session(config=config)
 
 def print_info(mode, config):
     print('----------------------- INFO -----------------------')
