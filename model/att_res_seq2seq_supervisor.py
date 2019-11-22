@@ -5,9 +5,10 @@ import numpy as np
 import pandas as pd
 import yaml
 from keras.callbacks import ModelCheckpoint, EarlyStopping
-from keras.layers import LSTM, Dense, Input
+from keras.layers import LSTM, Dense, Input, concatenate
 from keras.models import Model
 from keras.utils import plot_model
+from keras.layers.wrappers import Bidirectional
 from tqdm import tqdm
 from lib import utils
 from model.attention_mechanism import AttentionDecoder
@@ -114,20 +115,20 @@ class AttentionResidualSeq2SeqSupervisor():
         encoder_inputs = Input(shape=(None, self._input_dim))
         encoder_outputs = ResidualLSTM(encoder_inputs, rnn_width=self._rnn_units, rnn_depth=self._rnn_layers, rnn_dropout=self._drop_out)
 
-        attention_decoder = AttentionDecoder(self._rnn_units, self._output_dim, is_monotonic=False, normalize_energy=False)
-
         decoder_inputs = Input(shape=(None, self._output_dim))
-        attention_outputs = attention_decoder([encoder_outputs, decoder_inputs], use_teacher_forcing=False)
+        attention_decoder = AttentionDecoder(self._rnn_units, self._output_dim, is_monotonic=False, normalize_energy=False)
+        attention_input = concatenate([encoder_outputs, decoder_inputs], axis=-1)
+        attention_output = attention_decoder(attention_input)
 
-        decoder_outputs = ResidualLSTM(attention_outputs, rnn_width=self._rnn_units, rnn_depth=self._rnn_layers, rnn_dropout=self._drop_out)
-        
+        decoder_outputs = ResidualLSTM(attention_output, rnn_width=self._rnn_units, rnn_depth=self._rnn_layers, rnn_dropout=self._drop_out)
+
         # dense decoder_outputs
         decoder_dense = Dense(self._output_dim, activation='relu')
         decoder_outputs = decoder_dense(decoder_outputs)
 
         # Define the model that will turn
         # `encoder_input_data` & `decoder_input_data` into `decoder_target_data`
-        model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
+        model = Model(inputs=[encoder_inputs, decoder_inputs], outputs=decoder_outputs)
 
         if is_training:
             return model
@@ -144,8 +145,8 @@ class AttentionResidualSeq2SeqSupervisor():
             decoder_state_input_c = Input(shape=(self._rnn_units,))
             decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
 
-            decoder_outputs = ResidualLSTM(attention_outputs, rnn_width=self._rnn_units, rnn_depth=self._rnn_layers, rnn_dropout=self._drop_out)
-            decoder_states = decoder_outputs[1]
+            decoder_outputs = ResidualLSTM(attention_output, rnn_width=self._rnn_units, rnn_depth=self._rnn_layers, rnn_dropout=self._drop_out)
+            decoder_states = decoder_outputs[1:]
             decoder_outputs = decoder_dense(decoder_outputs)
             self.decoder_model = Model(
                 [decoder_inputs] + decoder_states_inputs,

@@ -12,7 +12,7 @@
 from keras.layers import LSTM, Lambda
 from keras.layers.merge import add
 
-def ResidualLSTM(input, rnn_width, rnn_depth, rnn_dropout):
+def ResidualLSTM(input, rnn_width, rnn_depth, rnn_dropout, return_last_element=False):
     """
     The intermediate LSTM layers return sequences, while the last returns a single element.
     The input is also a sequence. In order to match the shape of input and output of the LSTM
@@ -31,11 +31,12 @@ def ResidualLSTM(input, rnn_width, rnn_depth, rnn_dropout):
                 # If we want different rnn_width, we'd have to perform the sum from layer 2 on.
                 x = x_rnn
         else:
+            if return_last_element:
             # Last layer does not return sequences, just the last element
             # so we select only the last element of the previous output.
-            def slice_last(x):
-                return x[..., -1, :]
-            x = add([Lambda(slice_last)(x), x_rnn])
+                def slice_last(x):
+                    return x[..., -1, :]
+                x = add([Lambda(slice_last)(x), x_rnn])
     return x
 
 if __name__ == '__main__':
@@ -43,6 +44,6 @@ if __name__ == '__main__':
     from keras.layers import Input
     from keras.models import Model
     
-    input = Input(shape=(None, 24))
+    input = Input(shape=(30, 24))
     output = ResidualLSTM(input, rnn_width=10, rnn_depth=8, rnn_dropout=0.2)
     model = Model(inputs=input, outputs=output)
