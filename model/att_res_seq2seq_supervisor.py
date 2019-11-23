@@ -8,6 +8,7 @@ from tensorflow.python.keras.layers import Dense, Input, Concatenate
 from tensorflow.python.keras.models import Model
 from tensorflow.python.keras.utils import plot_model
 from tensorflow.python.keras import callbacks as keras_callbacks
+from tensorflow.python.keras.models import load_model
 from tqdm import tqdm
 from lib import utils
 from model.residual_lstm import Residual_enc, Residual_dec
@@ -155,11 +156,11 @@ class AttentionResidualSeq2SeqSupervisor():
             plot_model(model=self.encoder_model, to_file=self._log_dir + '/encoder.png', show_shapes=True)
 
             # --------------------------------------- Decoder model ----------------------------------------------------
-            decoder_state_input_h = Input(shape=(self._rnn_units), name='decoder_state_input_h')
-            decoder_state_input_c = Input(shape=(self._rnn_units), name='decoder_state_input_c')
+            decoder_state_input_h = Input(shape=(self._rnn_units,), name='decoder_state_input_h')
+            decoder_state_input_c = Input(shape=(self._rnn_units,), name='decoder_state_input_c')
             encoder_inf_states = Input(shape=(self._seq_len, self._rnn_units),
                                        name='encoder_inf_states_input')
-            decoder_inputs = Input(shape=(self._horizon + 1, self._output_dim),
+            decoder_inputs = Input(shape=(self._horizon, self._output_dim),
                                    name='decoder_input')
 
             decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
@@ -264,13 +265,22 @@ class AttentionResidualSeq2SeqSupervisor():
         # Generate empty target sequence of length 1.
         target_seq = np.zeros((1, 1, self._output_dim))
 
-        # target_seq[0, 0, 0] = source[0, -1, 0]
+        # model to get encoder_inf_state_input
+        if not os.path.exists(self._log_dir + 'enc_inf_model.hdf5'):
+            input = Input(shape=(self._seq_len, self._input_dim))
+            encoder_inf_states, _, _ = Residual_enc(input, rnn_unit=self._rnn_units,
+                                                                        rnn_depth=self._rnn_layers,
+                                                                        rnn_dropout=self._drop_out)
+            model_predict = Model(inputs=input, outputs=[encoder_inf_states])
+        else:
+            model_predict = load_model(self._log_dir + 'enc_inf_model.hdf5')
 
+        encoder_inf_state_input = model_predict.predict(source)
         yhat = np.zeros(shape=(self._horizon + 1, 1),
                         dtype='float32')
         for i in range(self._horizon + 1):
             output_tokens, h, c = self.decoder_model.predict(
-                [target_seq] + states_value)
+                [target_seq, encoder_inf_state_input] + states_value)
             output_tokens = output_tokens[0, -1, 0]
             yhat[i] = output_tokens
 
