@@ -164,7 +164,7 @@ class AttentionResidualSeq2SeqSupervisor():
                                    name='decoder_input')
 
             decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
-
+            
             decoder_outputs, dec_state_h, dec_state_c = Residual_dec(decoder_inputs, rnn_unit=self._rnn_units,
                                                                      rnn_depth=self._rnn_layers,
                                                                      rnn_dropout=self._drop_out,
@@ -180,7 +180,6 @@ class AttentionResidualSeq2SeqSupervisor():
             decoder_outputs = Concatenate(axis=-1, name='concat')([decoder_outputs, attn_out])
             decoder_dense = Dense(self._output_dim, activation='relu')
             decoder_outputs = decoder_dense(decoder_outputs)
-
             self.decoder_model = Model(
                 [decoder_inputs, encoder_inf_states] + decoder_states_inputs,
                 [decoder_outputs] + decoder_states)
@@ -240,9 +239,7 @@ class AttentionResidualSeq2SeqSupervisor():
                 break
             for k in range(K):
                 input = np.zeros(shape=(1, l, self._input_dim))
-                # input_dim = 2
                 input[0, :, 0] = pd[i:i + l, k]
-                # input[0, :, 1] = bm[i:i + l, k]
                 yhats = self._predict(input)
                 yhats = np.squeeze(yhats, axis=-1)
                 _pd[i + l:i + l + h, k] = yhats
@@ -266,14 +263,11 @@ class AttentionResidualSeq2SeqSupervisor():
         target_seq = np.zeros((1, 1, self._output_dim))
 
         # model to get encoder_inf_state_input
-        if not os.path.exists(self._log_dir + 'enc_inf_model.hdf5'):
-            input = Input(shape=(self._seq_len, self._input_dim))
-            encoder_inf_states, _, _ = Residual_enc(input, rnn_unit=self._rnn_units,
-                                                                        rnn_depth=self._rnn_layers,
-                                                                        rnn_dropout=self._drop_out)
-            model_predict = Model(inputs=input, outputs=[encoder_inf_states])
-        else:
-            model_predict = load_model(self._log_dir + 'enc_inf_model.hdf5')
+        input = Input(shape=(self._seq_len, self._input_dim))
+        encoder_inf_states, _, _ = Residual_enc(input, rnn_unit=self._rnn_units,
+                                                                    rnn_depth=self._rnn_layers,
+                                                                    rnn_dropout=self._drop_out)
+        model_predict = Model(inputs=input, outputs=[encoder_inf_states])
 
         encoder_inf_state_input = model_predict.predict(source)
         yhat = np.zeros(shape=(self._horizon + 1, 1),
