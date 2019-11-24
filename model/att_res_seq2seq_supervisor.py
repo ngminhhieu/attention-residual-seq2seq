@@ -152,7 +152,7 @@ class AttentionResidualSeq2SeqSupervisor():
                                                                      rnn_depth=self._rnn_layers,
                                                                      rnn_dropout=self._drop_out)
             encoder_states = [enc_state_h, enc_state_c]
-            self.encoder_model = Model(encoder_inputs, encoder_states)
+            self.encoder_model = Model(encoder_inputs, [encoder_outputs] + encoder_states)
             plot_model(model=self.encoder_model, to_file=self._log_dir + '/encoder.png', show_shapes=True)
 
             # --------------------------------------- Decoder model ----------------------------------------------------
@@ -258,18 +258,12 @@ class AttentionResidualSeq2SeqSupervisor():
         utils.save_metrics(error_list, self._log_dir, self._alg_name)
 
     def _predict(self, source):
-        states_value = self.encoder_model.predict(source)
+        output = self.encoder_model.predict(source)
+        encoder_inf_state_input = output[0]
+        states_value = output[1:]
         # Generate empty target sequence of length 1.
         target_seq = np.zeros((1, 1, self._output_dim))
 
-        # model to get encoder_inf_state_input
-        input = Input(shape=(self._seq_len, self._input_dim))
-        encoder_inf_states, _, _ = Residual_enc(input, rnn_unit=self._rnn_units,
-                                                                    rnn_depth=self._rnn_layers,
-                                                                    rnn_dropout=self._drop_out)
-        model_predict = Model(inputs=input, outputs=[encoder_inf_states])
-
-        encoder_inf_state_input = model_predict.predict(source)
         yhat = np.zeros(shape=(self._horizon + 1, 1),
                         dtype='float32')
         for i in range(self._horizon + 1):
