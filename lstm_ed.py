@@ -2,7 +2,7 @@ import argparse
 import os
 import sys
 import yaml
-from model.att_res_seq2seq_supervisor import AttentionResidualSeq2SeqSupervisor
+from model.encoder_decoder_supervisor import EncoderDecoder
 from lib import utils
 import numpy as np
 
@@ -48,20 +48,20 @@ def print_info(mode, config):
 
 
 def train(config):
-    att_res_seq2seq_supervisor = AttentionResidualSeq2SeqSupervisor(is_training=True, **config)
-    att_res_seq2seq_supervisor.plot_models()
-    att_res_seq2seq_supervisor.train()
+    lstm_ed = EncoderDecoder(is_training=True, **config)
+    lstm_ed.plot_models()
+    lstm_ed.train()
 
 
 def test(config):
-    att_res_seq2seq_supervisor = AttentionResidualSeq2SeqSupervisor(is_training=False, **config)
-    att_res_seq2seq_supervisor.test()
-    att_res_seq2seq_supervisor.plot_series()
+    lstm_ed = EncoderDecoder(is_training=False, **config)
+    lstm_ed.test()
+    lstm_ed.plot_series()
 
 
 def evaluate(config):
-    att_res_seq2seq_supervisor = AttentionResidualSeq2SeqSupervisor(is_training=False, **config)
-    att_res_seq2seq_supervisor.evaluate()
+    lstm_ed = EncoderDecoder(is_training=False, **config)
+    lstm_ed.evaluate()
 
 if __name__ == '__main__':
     np.random.seed(0)

@@ -45,8 +45,10 @@ def Residual_dec(input, rnn_unit, rnn_depth, rnn_dropout, init_states):
     """
 
     x = input
-    x_rnn, state_h, state_c = LSTM(rnn_unit, return_sequences=True,
-                                   return_state=True, name='LSTM_dec_{}'.format(0))(x, initial_state=init_states)
+
+    decoder = LSTM(rnn_unit, return_sequences=True,
+                                   return_state=True, name='LSTM_dec_{}'.format(0))
+    x_rnn, state_h, state_c = decoder(x, initial_state=init_states)
     x = x_rnn
 
     for i in range(1, rnn_depth, 1):
@@ -61,13 +63,3 @@ def Residual_dec(input, rnn_unit, rnn_depth, rnn_dropout, init_states):
             x = x_rnn
 
     return x, state_h, state_c
-
-if __name__ == '__main__':
-    # Example usage
-    from keras.layers import Input
-    from keras.models import Model
-    from keras.utils import plot_model
-    input = Input(shape=(None, 24))
-    output = Residual_enc(input, rnn_unit=10, rnn_depth=8, rnn_dropout=0.2)
-    model = Model(inputs=input, outputs=output)
-    plot_model(model, 'model.png', show_shapes=True)
