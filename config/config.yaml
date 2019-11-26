@@ -11,7 +11,6 @@ model:
   seq_len: 24
   horizon: 1
   input_dim: 1
-  verified_percentage: 1
   l1_decay: 0
   num_nodes: 1
   output_dim: 1

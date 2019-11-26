@@ -23,7 +23,6 @@ def print_info(mode, config):
     print('|--- SEQ_LEN:\t{}'.format(config['model']['seq_len']))
     print('|--- HORIZON:\t{}'.format(config['model']['horizon']))
     print('|--- INPUT_DIM:\t{}'.format(config['model']['input_dim']))
-    print('|--- VERIFIED_PERCENTAGE:\t{}'.format(config['model']['verified_percentage']))
     print('|--- L1_DECAY:\t{}'.format(config['model']['l1_decay']))
     print('|--- NUM_NODES:\t{}'.format(config['model']['num_nodes']))
     print('|--- OUTPUT_DIMS:\t{}'.format(config['model']['output_dim']))

@@ -65,24 +65,19 @@ def prepare_train_valid_test_2d(data, p):
 def create_data_lstm_ed(data, seq_len, r, input_dim, output_dim, horizon):
     K = data.shape[1]
     T = data.shape[0]
-    bm = binary_matrix(r, T, K)
     _data = data.copy()
     _std = np.std(data)
 
-    _data[bm == 0] = np.random.uniform(_data[bm == 0] - _std, _data[bm == 0] + _std)
-
     en_x = np.zeros(shape=((T - seq_len - horizon) * K, seq_len, input_dim))
-    de_x = np.zeros(shape=((T - seq_len - horizon) * K, horizon + 1, output_dim))
-    de_y = np.zeros(shape=((T - seq_len - horizon) * K, horizon + 1, output_dim))
+    de_x = np.zeros(shape=((T - seq_len - horizon) * K, horizon, output_dim))
+    de_y = np.zeros(shape=((T - seq_len - horizon) * K, horizon, output_dim))
 
     _idx = 0
     for k in range(K):
         for i in range(T - seq_len - horizon):
-            en_x[_idx, :, 0] = _data[i:i + seq_len, k]
-
-            de_x[_idx, 0, 0] = 0
-            de_x[_idx, 1:, 0] = data[i + seq_len - 1:i + seq_len + horizon - 1, k]
-            de_y[_idx, :, 0] = data[i + seq_len - 1:i + seq_len + horizon, k]
+            en_x[_idx, :, 0] = data[i:i + seq_len, k]
+            de_x[_idx, :, 0] = data[i + seq_len - 1:i + seq_len + horizon - 1, k]
+            de_y[_idx, :, 0] = data[i + seq_len:i + seq_len + horizon, k]
 
             _idx += 1
     return en_x, de_x, de_y
@@ -102,7 +97,7 @@ def load_dataset_lstm_ed(seq_len, horizon, input_dim, output_dim, dataset, r, p,
     train_data2d_norm = scaler.transform(train_data2d)
     valid_data2d_norm = scaler.transform(valid_data2d)
     test_data2d_norm = scaler.transform(test_data2d)
-
+    
     data['test_data_norm'] = test_data2d_norm.copy()
 
     encoder_input_train, decoder_input_train, decoder_target_train = create_data_lstm_ed(train_data2d_norm,

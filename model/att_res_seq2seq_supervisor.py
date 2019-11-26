@@ -1,6 +1,7 @@
 import os
 import time
 import numpy as np
+np.random.seed(1337)
 import pandas as pd
 import yaml
 from tensorflow.python.keras.callbacks import ModelCheckpoint, EarlyStopping
@@ -101,9 +102,9 @@ class AttentionResidualSeq2SeqSupervisor():
             model_type = kwargs['model'].get('model_type')
             verified_percentage = kwargs['model'].get('verified_percentage')
 
-            run_id = '%s_%d_%d_%s_%d_%g/' % (
+            run_id = '%s_%d_%d_%s_%d/' % (
                 model_type, seq_len, horizon,
-                structure, batch_size, verified_percentage)
+                structure, batch_size)
             base_dir = kwargs.get('base_dir')
             log_dir = os.path.join(base_dir, run_id)
         if not os.path.exists(log_dir):
@@ -127,8 +128,8 @@ class AttentionResidualSeq2SeqSupervisor():
                                                                     rnn_dropout=self._drop_out,
                                                                     init_states=encoder_states)
 
-        attn_layer = AttentionLayer(input_shape=([None, self._seq_len, self._rnn_units],
-                                                    [None, None, self._rnn_units]),
+        attn_layer = AttentionLayer(input_shape=([self._batch_size, self._seq_len, self._rnn_units],
+                                                    [self._batch_size, self._horizon, self._rnn_units]),
                                     name='attention_layer')
         attn_out, attn_states = attn_layer([encoder_outputs, decoder_outputs])
         decoder_outputs = Concatenate(axis=-1, name='concat_layer')([decoder_outputs, attn_out])
@@ -195,7 +196,7 @@ class AttentionResidualSeq2SeqSupervisor():
             self._plot_training_history(training_history)
             self._save_model_history(training_history)
             config = dict(self._kwargs)
-            config_filename = 'config_lstm.yaml'
+            config_filename = 'config.yaml'
             config['train']['log_dir'] = self._log_dir
             with open(os.path.join(self._log_dir, config_filename), 'w') as f:
                 yaml.dump(config, f, default_flow_style=False)
@@ -214,7 +215,6 @@ class AttentionResidualSeq2SeqSupervisor():
         data_test = self._data['test_data_norm']
         T = len(data_test)
         K = data_test.shape[1]
-        bm = utils.binary_matrix(self._verified_percentage, len(data_test), self._nodes)
         l = self._seq_len
         h = self._horizon
         pd = np.zeros(shape=(T - h, self._nodes), dtype='float32')
@@ -235,12 +235,9 @@ class AttentionResidualSeq2SeqSupervisor():
                 yhats = self._predict(input)
                 yhats = np.squeeze(yhats, axis=-1)
                 _pd[i + l:i + l + h, k] = yhats
-                # update y
-                _bm = bm[i + l:i + l + h, k].copy()
-                _gt = data_test[i + l:i + l + h, k].copy()
-                pd[i + l:i + l + h, k] = yhats * (1.0 - _bm) + _gt * _bm
-        # save bm and pd to log dir
-        np.savez(self._log_dir + "binary_matrix_and_pd", bm=bm, pd=pd)
+                pd[i + l:i + l + h, k] = data_test[i + l:i + l + h, k].copy()
+        # save pd to log dir
+        np.savez(self._log_dir + "binary_matrix_and_pd", pd=pd)
         predicted_data = scaler.inverse_transform(_pd)
         ground_truth = scaler.inverse_transform(data_test[:_pd.shape[0]])
         np.save(self._log_dir + 'pd', predicted_data)
@@ -256,9 +253,9 @@ class AttentionResidualSeq2SeqSupervisor():
         # Generate empty target sequence of length 1.
         target_seq = np.zeros((1, 1, self._output_dim))
 
-        yhat = np.zeros(shape=(self._horizon + 1, 1),
+        yhat = np.zeros(shape=(self._horizon, 1),
                         dtype='float32')
-        for i in range(self._horizon + 1):
+        for i in range(self._horizon):
             output_tokens, h, c = self.decoder_model.predict(
                 [target_seq, encoder_inf_state_input] + states_value)
             output_tokens = output_tokens[0, -1, 0]
