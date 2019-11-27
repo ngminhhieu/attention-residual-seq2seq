@@ -1,11 +1,11 @@
 ---
-alg: grid-data
-base_dir: log/grid-data
+alg: actual_data
+base_dir: log/actual_data
 log_level: INFO
 gpu: 0
 data:
   batch_size: 200
-  dataset: data/grid_data.npz
+  dataset: data/actual_data.npz
   test_size: 0.2
 model:
   seq_len: 24
