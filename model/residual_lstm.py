@@ -21,11 +21,11 @@ def Residual_enc(input, rnn_unit, rnn_depth, rnn_dropout):
     """
 
     x = input
-    state_h, state_c = None, None
+    # states = []
     for i in range(rnn_depth):
         x_rnn, state_h, state_c = LSTM(rnn_unit, return_sequences=True,
-                                   return_state=True, name='LSTM_enc_{}'.format(i))(x)
-
+                                   return_state=True, name='LSTM_enc_{}'.format(i+1))(x)
+        # states += [state_h, state_c]
         # Intermediate layers return sequences, input is also a sequence.
         if i > 0:
             x = add([x, x_rnn])
@@ -43,25 +43,31 @@ def Residual_dec(input, rnn_unit, rnn_depth, rnn_dropout, init_states):
     The input is also a sequence. In order to match the shape of input and output of the LSTM
     to sum them we can do it only for all layers but the last.
     """
-
+    layers = []
     x = input
-    x_rnn, states_h, states_c = LSTM(rnn_unit, return_sequences=True,
-                                   return_state=True, name='LSTM_dec_{}'.format(0))(x, initial_state=init_states)
+    # states = []
+    layer = LSTM(rnn_unit, return_sequences=True,
+                                   return_state=True, name='LSTM_dec_{}'.format(1))
+    x_rnn, states_h, states_c = layer(input, initial_state=init_states)
     x = x_rnn
+    layers.append(layer)
 
     for i in range(1, rnn_depth, 1):
-        x_rnn, state_h, state_c = LSTM(rnn_unit, return_sequences=True,
-                                       return_state=True, name='LSTM_dec_{}'.format(i))(x)
+    # for i in range(1,rnn_depth):
+        layer = LSTM(rnn_unit, return_sequences=True,
+                                       return_state=True, name='LSTM_dec_{}'.format(i+1))
+        layers.append(layer)                                       
+        x_rnn, state_h, state_c = layer(x)
+        # states += [state_h, state_c]
         # Intermediate layers return sequences, input is also a sequence.
         if i > 0:
             x = add([x, x_rnn])
-            states_h = add([states_h, state_h])
         else:
             # Note that the input size and RNN output has to match, due to the sum operation.
             # If we want different rnn_width, we'd have to perform the sum from layer 2 on.
             x = x_rnn
 
-    return x, states_h, states_c
+    return layers, x, state_h, state_c
 
 if __name__ == '__main__':
     # Example usage

@@ -69,15 +69,16 @@ def create_data_lstm_ed(data, seq_len, r, input_dim, output_dim, horizon):
     _std = np.std(data)
 
     en_x = np.zeros(shape=((T - seq_len - horizon) * K, seq_len, input_dim))
-    de_x = np.zeros(shape=((T - seq_len - horizon) * K, horizon, output_dim))
-    de_y = np.zeros(shape=((T - seq_len - horizon) * K, horizon, output_dim))
+    de_x = np.zeros(shape=((T - seq_len - horizon) * K, horizon + 1, output_dim))
+    de_y = np.zeros(shape=((T - seq_len - horizon) * K, horizon + 1, output_dim))
 
     _idx = 0
     for k in range(K):
         for i in range(T - seq_len - horizon):
             en_x[_idx, :, 0] = data[i:i + seq_len, k]
-            de_x[_idx, :, 0] = data[i + seq_len - 1:i + seq_len + horizon - 1, k]
-            de_y[_idx, :, 0] = data[i + seq_len:i + seq_len + horizon, k]
+            de_x[_idx, 0, 0] = 0
+            de_x[_idx, 1:, 0] = data[i + seq_len - 1:i + seq_len + horizon - 1, k]
+            de_y[_idx, :, 0] = data[i + seq_len - 1:i + seq_len + horizon, k]
 
             _idx += 1
     return en_x, de_x, de_y
