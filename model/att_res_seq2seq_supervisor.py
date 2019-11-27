@@ -272,9 +272,9 @@ class AttentionResidualSeq2SeqSupervisor():
         # Generate empty target sequence of length 1.
         target_seq = np.zeros((1, 1, self._output_dim))
 
-        yhat = np.zeros(shape=(self._horizon + 1, 1),
+        yhat = np.zeros(shape=(self._horizon, 1),
                         dtype='float32')
-        for i in range(self._horizon + 1):
+        for i in range(self._horizon):
             output_tokens, h, c = self.decoder_model.predict(
                 [target_seq, encoder_inf_state_input] + states_value)
             # output = self.decoder_model.predict([target_seq, encoder_inf_state_input] + states_value)
