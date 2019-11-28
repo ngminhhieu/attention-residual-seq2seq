@@ -14,7 +14,7 @@ model:
   l1_decay: 0
   num_nodes: 1
   output_dim: 1
-  rnn_units: 100
+  rnn_units: 105
   rnn_layers: 3
 train:
   dropout: 0.5
