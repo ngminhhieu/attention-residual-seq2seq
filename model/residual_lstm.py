@@ -21,11 +21,9 @@ def Residual_enc(input, rnn_unit, rnn_depth, rnn_dropout):
     """
 
     x = input
-    # states = []
     for i in range(rnn_depth):
         x_rnn, state_h, state_c = LSTM(rnn_unit, return_sequences=True,
                                    return_state=True, name='LSTM_enc_{}'.format(i+1))(x)
-        # states += [state_h, state_c]
         # Intermediate layers return sequences, input is also a sequence.
         if i > 0:
             x = add([x, x_rnn])
@@ -45,10 +43,9 @@ def Residual_dec(input, rnn_unit, rnn_depth, rnn_dropout, init_states):
     """
     layers = []
     x = input
-    # states = []
     layer = LSTM(rnn_unit, return_sequences=True,
                                    return_state=True, name='LSTM_dec_{}'.format(1))
-    x_rnn, states_h, states_c = layer(input, initial_state=init_states)
+    x_rnn, state_h, state_c = layer(input, initial_state=init_states)
     x = x_rnn
     layers.append(layer)
 
@@ -58,7 +55,6 @@ def Residual_dec(input, rnn_unit, rnn_depth, rnn_dropout, init_states):
                                        return_state=True, name='LSTM_dec_{}'.format(i+1))
         layers.append(layer)                                       
         x_rnn, state_h, state_c = layer(x)
-        # states += [state_h, state_c]
         # Intermediate layers return sequences, input is also a sequence.
         if i > 0:
             x = add([x, x_rnn])

@@ -1,0 +1,26 @@
+alg: att-res-seq2seq
+base_dir: log/att-res-seq2seq/forecast_data
+data:
+  batch_size: 200
+  dataset: data/forecast_data.npz
+  test_size: 0.2
+  valid_size: 0.2
+gpu: 0
+log_level: INFO
+model:
+  horizon: 1
+  input_dim: 1
+  l1_decay: 0
+  num_nodes: 1
+  output_dim: 1
+  rnn_layers: 3
+  rnn_units: 100
+  seq_len: 24
+test:
+  run_times: 1
+train:
+  dropout: 0.5
+  epochs: 300
+  log_dir: log/att-res-seq2seq/forecast_data\None_24_1_100-100-100_200_1/
+  optimizer: adam
+  patience: 20

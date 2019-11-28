@@ -1,12 +1,13 @@
 ---
-alg: actual_data
-base_dir: log/actual_data
+alg: att-res-seq2seq
+base_dir: log/att-res-seq2seq/actual_data
 log_level: INFO
 gpu: 0
 data:
   batch_size: 200
   dataset: data/actual_data.npz
   test_size: 0.2
+  valid_size: 0.2
 model:
   seq_len: 24
   horizon: 1

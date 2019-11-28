@@ -2,6 +2,7 @@ import argparse
 import os
 import sys
 import yaml
+import numpy as np
 from model.att_res_seq2seq_supervisor import AttentionResidualSeq2SeqSupervisor
 from lib import utils
 
@@ -63,6 +64,7 @@ def evaluate(config):
     att_res_seq2seq_supervisor.evaluate()
 
 if __name__ == '__main__':
+    # np.random.seed(1)
     sys.path.append(os.getcwd())
     parser = argparse.ArgumentParser()
     parser.add_argument('--use_cpu_only', default=False, type=str, help='Whether to run tensorflow on cpu.')

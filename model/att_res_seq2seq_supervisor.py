@@ -1,7 +1,6 @@
 import os
 import time
 import numpy as np
-np.random.seed(1337)
 import pandas as pd
 import yaml
 from tensorflow.python.keras.callbacks import ModelCheckpoint, EarlyStopping
@@ -42,6 +41,7 @@ class AttentionResidualSeq2SeqSupervisor():
         # data args
         self._dataset = self._data_kwargs.get('dataset')
         self._test_size = self._data_kwargs.get('test_size')
+        self._valid_size = self._data_kwargs.get('valid_size')
 
         # logging.
         self._log_dir = self._get_log_dir(kwargs)
@@ -70,10 +70,10 @@ class AttentionResidualSeq2SeqSupervisor():
         self._run_times = self._test_kwargs.get('run_times')
 
         # Load data
-        self._data = utils.load_dataset_lstm_ed(seq_len=self._seq_len, horizon=self._horizon,
+        self._data = utils.load_dataset(seq_len=self._seq_len, horizon=self._horizon,
                                                 input_dim=self._input_dim, output_dim=self._output_dim,
                                                 dataset=self._dataset,
-                                                r=self._verified_percentage, p=self._test_size, **kwargs)
+                                                r=self._verified_percentage, test_size=self._test_size, valid_size=self._valid_size, **kwargs)
         self.callbacks_list = []
 
         self._checkpoints = ModelCheckpoint(self._log_dir + "best_model.hdf5",
@@ -152,26 +152,16 @@ class AttentionResidualSeq2SeqSupervisor():
             plot_model(model=self.encoder_model, to_file=self._log_dir + '/encoder.png', show_shapes=True)
 
             # --------------------------------------- Decoder model ----------------------------------------------------
-            # decoder_state_input_h = Input(shape=(self._rnn_units,), name='decoder_state_input_h')
-            # decoder_state_input_c = Input(shape=(self._rnn_units,), name='decoder_state_input_c')
-            # decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
+            decoder_state_input_h = Input(shape=(self._rnn_units,), name='decoder_state_input_h')
+            decoder_state_input_c = Input(shape=(self._rnn_units,), name='decoder_state_input_c')
+            decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
 
-            # decoder_outputs, _, _ = layers_dec[0](decoder_inputs, initial_state=decoder_states_inputs)
-            # for i in range (1, self._rnn_layers):
-            #     d_o, dec_state_h, dec_state_c = layers_dec[i](decoder_outputs)
-            #     decoder_outputs = add([decoder_outputs, d_o])
-
-            # decoder_states = [dec_state_h, dec_state_c]
-            decoder_states_inputs = []
-            decoder_states = []
-            decoder_outputs = decoder_inputs
-            for i in range(self._rnn_layers):
-                decoder_state_input_h = Input(shape=(self._rnn_units,))
-                decoder_state_input_c = Input(shape=(self._rnn_units,))
-                decoder_states_inputs += [decoder_state_input_h, decoder_state_input_c]
-                d_o, state_h, state_c = layers_dec[i](decoder_outputs, initial_state=decoder_states_inputs[2*i:2*(i+1)])
+            decoder_outputs, _, _ = layers_dec[0](decoder_inputs, initial_state=decoder_states_inputs)
+            for i in range (1, self._rnn_layers):
+                d_o, dec_state_h, dec_state_c = layers_dec[i](decoder_outputs)
                 decoder_outputs = add([decoder_outputs, d_o])
-                decoder_states += [state_h, state_c]
+
+            decoder_states = [dec_state_h, dec_state_c]
 
             encoder_inf_states = Input(shape=(self._seq_len, self._rnn_units),
                                        name='encoder_inf_states_input')
@@ -240,7 +230,7 @@ class AttentionResidualSeq2SeqSupervisor():
             for k in range(K):
                 input = np.zeros(shape=(1, l, self._input_dim))
                 input[0, :, 0] = pd[i:i + l, k]
-                yhats = self._predict_2(input)
+                yhats = self._predict_full_model(input)
                 yhats = np.squeeze(yhats, axis=-1)
                 _pd[i + l:i + l + h, k] = yhats
                 pd[i + l:i + l + h, k] = data_test[i + l:i + l + h, k].copy()
@@ -254,7 +244,7 @@ class AttentionResidualSeq2SeqSupervisor():
         error_list = utils.cal_error(ground_truth.flatten(), predicted_data.flatten())
         utils.save_metrics(error_list, self._log_dir, self._alg_name)
 
-    def _predict_2(self, input):
+    def _predict_full_model(self, input):
         target_seq = np.zeros((1, 1, self._output_dim))
         yhat = np.zeros(shape=(self._horizon, 1),
                         dtype='float32')
@@ -277,8 +267,6 @@ class AttentionResidualSeq2SeqSupervisor():
         for i in range(self._horizon):
             output_tokens, h, c = self.decoder_model.predict(
                 [target_seq, encoder_inf_state_input] + states_value)
-            # output = self.decoder_model.predict([target_seq, encoder_inf_state_input] + states_value)
-            # output_tokens = output[0]
             output_tokens = output_tokens[0, -1, 0]
             yhat[i] = output_tokens
 
@@ -287,7 +275,6 @@ class AttentionResidualSeq2SeqSupervisor():
 
             # Update states
             states_value = [h, c]
-            # states_value = output[1:]
         return yhat[-self._horizon:]
 
     def load(self):
