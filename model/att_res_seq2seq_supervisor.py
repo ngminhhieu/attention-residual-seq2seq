@@ -73,7 +73,8 @@ class AttentionResidualSeq2SeqSupervisor():
         self._data = utils.load_dataset(seq_len=self._seq_len, horizon=self._horizon,
                                                 input_dim=self._input_dim, output_dim=self._output_dim,
                                                 dataset=self._dataset,
-                                                r=self._verified_percentage, test_size=self._test_size, valid_size=self._valid_size, **kwargs)
+                                                test_size=self._test_size, valid_size=self._valid_size,
+                                                verified_percentage=self._verified_percentage)
         self.callbacks_list = []
 
         self._checkpoints = ModelCheckpoint(self._log_dir + "best_model.hdf5",
@@ -99,12 +100,13 @@ class AttentionResidualSeq2SeqSupervisor():
                 ['%d' % rnn_units for _ in range(rnn_layers)])
             seq_len = kwargs['model'].get('seq_len')
             horizon = kwargs['model'].get('horizon')
+            verified_percentage = kwargs['model'].get('verified_percentage')
 
             model_type = kwargs['model'].get('model_type')
 
             run_id = '%s_%d_%d_%s_%d_%g/' % (
                 model_type, seq_len, horizon,
-                structure, batch_size, 1)
+                structure, batch_size, verified_percentage)
             base_dir = kwargs.get('base_dir')
             log_dir = os.path.join(base_dir, run_id)
         if not os.path.exists(log_dir):
@@ -278,6 +280,7 @@ class AttentionResidualSeq2SeqSupervisor():
         data_test = self._data['test_data_norm']
         T = len(data_test)
         K = data_test.shape[1]
+        bm = utils.binary_matrix(self._verified_percentage, len(data_test), self._nodes)
         l = self._seq_len
         h = self._horizon
         pd = np.zeros(shape=(T - h, self._nodes), dtype='float32')
@@ -298,7 +301,10 @@ class AttentionResidualSeq2SeqSupervisor():
                 yhats = self._predict_full_model(input)
                 yhats = np.squeeze(yhats, axis=-1)
                 _pd[i + l:i + l + h, k] = yhats
-                pd[i + l:i + l + h, k] = data_test[i + l:i + l + h, k].copy()
+                # update y
+                _bm = bm[i + l:i + l + h, k].copy()
+                _gt = data_test[i + l:i + l + h, k].copy()
+                pd[i + l:i + l + h, k] = yhats * (1.0 - _bm) + _gt * _bm
         # save pd to log dir
         np.savez(self._log_dir + "binary_matrix_and_pd", pd=pd)
         predicted_data = scaler.inverse_transform(_pd)

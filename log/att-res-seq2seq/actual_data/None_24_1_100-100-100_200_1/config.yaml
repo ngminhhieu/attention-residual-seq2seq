@@ -16,6 +16,7 @@ model:
   rnn_layers: 3
   rnn_units: 100
   seq_len: 24
+  verified_percentage: 1
 test:
   run_times: 1
 train:

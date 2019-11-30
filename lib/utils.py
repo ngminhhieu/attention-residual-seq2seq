@@ -13,23 +13,6 @@ from scipy.sparse import linalg
 from sklearn.preprocessing import MinMaxScaler
 from datetime import datetime
 
-
-class StandardScaler:
-    """
-    Standard the input
-    """
-
-    def __init__(self, data):
-        self.mean = np.mean(data, axis=0)
-        self.std = np.std(data, axis=0)
-
-    def transform(self, data):
-        return (data - self.mean) / self.std
-
-    def inverse_transform(self, data):
-        return (data * self.std) + self.mean
-
-
 def get_logger(log_dir, name, log_filename='info.log', level=logging.INFO):
     logger = logging.getLogger(name)
     logger.setLevel(level)
@@ -61,9 +44,15 @@ def prepare_train_valid_test_2d(data, test_size, valid_size):
     return train_set, valid_set, test_set
 
 
-def create_data(data, seq_len, r, input_dim, output_dim, horizon):
+def create_data(data, seq_len, input_dim, output_dim, horizon, verified_percentage):
     K = data.shape[1]
     T = data.shape[0]
+
+    bm = binary_matrix(verified_percentage, T, K)
+    _data = data.copy()
+    _std = np.std(data)
+
+    _data[bm == 0] = np.random.uniform(_data[bm == 0] - _std, _data[bm == 0] + _std)
 
     en_x = np.zeros(shape=((T - seq_len - horizon) * K, seq_len, input_dim))
     de_x = np.zeros(shape=((T - seq_len - horizon) * K, horizon, output_dim))
@@ -72,15 +61,14 @@ def create_data(data, seq_len, r, input_dim, output_dim, horizon):
     _idx = 0
     for k in range(K):
         for i in range(T - seq_len - horizon):
-            en_x[_idx, :, 0] = data[i:i + seq_len, k]
-            # de_x[_idx, :, 0] = data[i + seq_len - 1:i + seq_len + horizon - 1, k]
+            en_x[_idx, :, 0] = _data[i:i + seq_len, k]
             de_y[_idx, :, 0] = data[i + seq_len:i + seq_len + horizon, k]
 
             _idx += 1
     return en_x, de_x, de_y
 
 
-def load_dataset(seq_len, horizon, input_dim, output_dim, dataset, r, test_size, valid_size, **kwargs):
+def load_dataset(seq_len, horizon, input_dim, output_dim, dataset, test_size, valid_size, verified_percentage):
     raw_data = np.load(dataset)['data']
 
     print('|--- Splitting train-test set.')
@@ -97,20 +85,22 @@ def load_dataset(seq_len, horizon, input_dim, output_dim, dataset, r, test_size,
 
     encoder_input_train, decoder_input_train, decoder_target_train = create_data(train_data2d_norm,
                                                                                          seq_len=seq_len,
-                                                                                         r=r,
                                                                                          input_dim=input_dim,
                                                                                          output_dim=output_dim,
-                                                                                         horizon=horizon)
+                                                                                         horizon=horizon,
+                                                                                         verified_percentage=verified_percentage)
     encoder_input_val, decoder_input_val, decoder_target_val = create_data(valid_data2d_norm,
-                                                                                   seq_len=seq_len, r=r,
+                                                                                   seq_len=seq_len,
                                                                                    input_dim=input_dim,
                                                                                    output_dim=output_dim,
-                                                                                   horizon=horizon)
+                                                                                   horizon=horizon,
+                                                                                   verified_percentage=verified_percentage)
     encoder_input_eval, decoder_input_eval, decoder_target_eval = create_data(test_data2d_norm,
-                                                                                      seq_len=seq_len, r=r,
+                                                                                      seq_len=seq_len,
                                                                                       input_dim=input_dim,
                                                                                       output_dim=output_dim,
-                                                                                      horizon=horizon)
+                                                                                      horizon=horizon,
+                                                                                      verified_percentage=verified_percentage)
 
     for cat in ["train", "val", "eval"]:
         e_x, d_x, d_y = locals()["encoder_input_" + cat], locals()[
